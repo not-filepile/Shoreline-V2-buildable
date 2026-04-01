@@ -6,8 +6,6 @@ import com.google.gson.JsonParser
 
 import java.nio.file.Files
 import java.util.jar.JarEntry
-import java.util.jar.JarFile
-import java.util.jar.JarOutputStream
 
 plugins {
     id 'fabric-loom' version '1.11-SNAPSHOT'
@@ -101,10 +99,6 @@ jar {
 }
 
 tasks.register('buildClientOnly') {
-    doFirst {
-        tasks.findByName('remapLoader')?.enabled = false
-    }
-
     finalizedBy 'build'
 }
 
@@ -190,130 +184,7 @@ tasks.register('clientJar', Jar) {
     archiveVersion = ""
 }
 
-def hasProguardRemapResources = [
-        'proguard/proguard.jar',
-        'proguard/configs/loader.txt',
-        'proguard/configs/client.txt',
-        'proguard/mappings/pre-loader-mappings.txt',
-        'proguard/mappings/pre-client-mappings.txt',
-        'proguard/libs/java/java.base.jmod'
-].every { file(it).exists() }
-
-if (hasProguardRemapResources) {
-    tasks.register('remapLoader', Exec) {
-        outputs.upToDateWhen { false }
-
-        commandLine 'java', '-jar', 'proguard/proguard.jar',
-                '@proguard/configs/loader.txt',
-                '-injars', tasks.loaderJar.archiveFile.get().asFile,
-                '-outjars', "${buildDir}/libs/loader-remapped.jar",
-                '-libraryjars', "proguard/libs/java/java.base.jmod",
-                '-libraryjars', "${buildDir}/libs/client-raw.jar",
-                '-printmapping', "proguard/mappings/loader-mappings.txt",
-                '-applymapping', "proguard/mappings/pre-loader-mappings.txt"
-
-        dependsOn tasks.loaderJar
-    }
-
-    tasks.register('remapClient', Exec) {
-        outputs.upToDateWhen { false }
-        // Proguard can't remap resource files where fully qualified class names are
-        // seperated by slashes and not periods (amazing)
-
-        // So we are replacing all the slashes in the refmap with periods so proguard
-        // can remap the mixin refmap correctly, then we will change the periods back
-        // to slashes after proguard obfuscates
-        def tempDir = new File("${buildDir}/tmp", "tempRemapClient")
-        def combinedMappings = file("${buildDir}/tmp/combined-mappings.txt")
-        def preClientMappings = file('proguard/mappings/pre-client-mappings.txt')
-        def loaderMappings = file('proguard/mappings/loader-mappings.txt')
-
-        doFirst {
-            if (tempDir.exists())
-            {
-                Files.walk(tempDir.toPath())
-                        .sorted(Comparator.reverseOrder())
-                        .map(java.nio.file.Path::toFile)
-                        .forEach(File::delete)
-
-                tempDir.delete()
-            }
-
-            tempDir.mkdirs()
-
-            copy {
-                from zipTree(tasks.clientJar.archivePath)
-                into tempDir
-            }
-
-            File shorelineRefmap = new File(tempDir, 'shoreline-refmap.json')
-            if (shorelineRefmap.exists())
-            {
-                def text = shorelineRefmap.text
-                text = text.replaceAll('/', '.')
-                shorelineRefmap.text = text
-            }
-
-            if (combinedMappings.exists())
-            {
-                combinedMappings.delete()
-            }
-
-            combinedMappings.parentFile.mkdirs()
-            combinedMappings.createNewFile()
-            combinedMappings.text = preClientMappings.text + System.lineSeparator() + loaderMappings.text
-
-            commandLine 'java', '-jar', 'proguard/proguard.jar',
-                    '@proguard/configs/client.txt',
-                    '-injars', tempDir,
-                    '-outjars', "${buildDir}/tmp/temp-client-remap.jar",
-                    '-libraryjars', "proguard/libs/java/java.base.jmod",
-                    '-libraryjars', "proguard/libs/mc",
-                    '-libraryjars', "${buildDir}/libs/loader-raw.jar",
-                    '-printmapping', "proguard/mappings/client-mappings.txt",
-                    '-applymapping', combinedMappings
-        }
-
-        // Replace all the periods to slashes in the refmap, and copy over to build/libs/
-        doLast {
-            def remapJar = new File("${buildDir}/tmp/temp-client-remap.jar")
-            def finalClientJar = new File("${buildDir}/libs/client-remapped.jar")
-
-            JarFile jarFile = new JarFile(remapJar)
-            JarOutputStream jos = new JarOutputStream(new FileOutputStream(finalClientJar))
-
-            jarFile.entries().each { JarEntry entry ->
-                InputStream is = jarFile.getInputStream(entry)
-                JarEntry newEntry = new JarEntry(entry.name)
-
-                jos.putNextEntry(newEntry)
-
-                if (entry.name == 'shoreline-refmap.json')
-                {
-                    def text = is.text
-                    text = text.replaceAll('\\.', '/')
-                    jos.write(text.bytes)
-                } else
-                {
-                    jos.write(is.bytes)
-                }
-
-                jos.closeEntry()
-                is.close()
-            }
-
-            jos.close()
-            jarFile.close()
-        }
-
-        dependsOn tasks.remapLoader
-    }
-
-    build.dependsOn(loaderJar, clientJar, remapLoader, remapClient)
-} else {
-    logger.lifecycle("Skipping custom ProGuard remap tasks because required files under /proguard are missing.")
-    build.dependsOn(loaderJar, clientJar)
-}
+build.dependsOn(loaderJar, clientJar)
 
 def execute(String cmd) {
     try {
