@@ -1,5 +1,7 @@
 [https://github.com/lolwut2/Shoreline-V2](https://github.com/lolwut2/Shoreline-V2)
 ---
+# git log [here](https://github.com/not-filepile/Shoreline-V2)
+---
 $25 exit-scammed client.  
 thx to lolwut for uploading the code(unbuildable)
 
