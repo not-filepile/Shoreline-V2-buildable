@@ -129,11 +129,6 @@ public class ChamsModule extends RenderModule
 
     public boolean isValid(Entity entity)
     {
-        if (entity instanceof FakePlayerEntity)
-        {
-            return false;
-        }
-
         if (!Managers.RENDER.isVisible(entity.getBoundingBox())
                 || MathHelper.square(range.getValue()) < entity.squaredDistanceTo(getCameraPos()))
         {

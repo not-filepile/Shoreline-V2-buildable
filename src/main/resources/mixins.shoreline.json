@@ -61,6 +61,7 @@
     "render.MixinCamera",
     "render.MixinGameRenderer",
     "render.MixinLayerRenderState",
+    "render.MixinLightDataAccess",
     "render.MixinLightmapTextureManager",
     "render.MixinMultiPhase",
     "render.MixinMultiPhaseParameters",

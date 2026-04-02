@@ -23,7 +23,6 @@ import net.shoreline.client.impl.imixin.IModel;
 import net.shoreline.client.impl.module.render.ChamsModule;
 import net.shoreline.client.impl.render.ChamsRenderer;
 import net.shoreline.client.impl.render.Layers;
-import net.shoreline.client.util.entity.FakePlayerEntity;
 import net.shoreline.eventbus.EventBus;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.*;
@@ -149,8 +148,40 @@ public abstract class MixinLivingEntityRenderer<T extends LivingEntity,
                     shift = At.Shift.AFTER))
     private void setAnglesHook(S livingEntityRenderState, MatrixStack matrixStack, VertexConsumerProvider vertexConsumerProvider, int i, CallbackInfo info)
     {
-        // The post-render Chams pass targets an older rendering contract and
-        // corrupts vertex builder state on 1.21.4. Leave the base entity render intact.
+        if (ChamsRenderer.rendering)
+        {
+            return;
+        }
+
+        boolean valid = ChamsModule.getInstance().isValid(last);
+        ((IModel) model).cancelModel(valid);
+        if (ChamsModule.getInstance().isEnabled() && valid)
+        {
+            if (model instanceof PlayerEntityModel playerEntityModel)
+            {
+                boolean extraLayer = ChamsModule.getInstance().extraLayer.getValue();
+                playerEntityModel.leftPants.visible = extraLayer;
+                playerEntityModel.rightPants.visible = extraLayer;
+                playerEntityModel.leftSleeve.visible = extraLayer;
+                playerEntityModel.rightSleeve.visible = extraLayer;
+                playerEntityModel.jacket.visible = extraLayer;
+                playerEntityModel.hat.visible = extraLayer;
+            }
+
+            int color = ChamsModule.getInstance().getColor(last).getRGB();
+            if (ChamsModule.getInstance().mode.getValue() == ChamsModule.ChamsMode.SHINE)
+            {
+                Layers.QUADS_GLINT.startDrawing();
+                VertexConsumerProvider.Immediate provider = MinecraftClient.getInstance().getBufferBuilders().getEffectVertexConsumers();
+                VertexConsumer consumer = ItemRenderer.getArmorGlintConsumer(provider, Layers.QUADS_GLINT, true);
+                this.model.render(matrixStack, consumer, i, OverlayTexture.DEFAULT_UV, color);
+                Layers.QUADS_GLINT.endDrawing();
+            }
+
+            ChamsRenderer renderer = ChamsModule.getInstance().mode.getValue().getRenderer();
+            float tickDelta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
+            ChamsRenderer.render(renderer, last, tickDelta, color);
+        }
     }
 
     @Redirect(

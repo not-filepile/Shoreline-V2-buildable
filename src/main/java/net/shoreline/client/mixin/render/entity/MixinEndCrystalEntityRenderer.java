@@ -93,7 +93,29 @@ public class MixinEndCrystalEntityRenderer
                     shift = At.Shift.AFTER))
     private void setAnglesHook(EndCrystalEntityRenderState endCrystalEntityRenderState, MatrixStack matrixStack, VertexConsumerProvider vertexConsumerProvider, int i, CallbackInfo info)
     {
-        // Disabled for 1.21.4: the extra Chams render pass breaks buffer builder state.
+        if (ChamsRenderer.rendering)
+        {
+            return;
+        }
+
+        boolean valid = ChamsModule.getInstance().isValid(last);
+        ((IModel) model).cancelModel(valid);
+        if (ChamsModule.getInstance().isEnabled() && valid)
+        {
+            int color = ChamsModule.getInstance().getColor(last).getRGB();
+            if (ChamsModule.getInstance().mode.getValue() == ChamsModule.ChamsMode.SHINE)
+            {
+                Layers.QUADS_GLINT.startDrawing();
+                VertexConsumerProvider provider = MinecraftClient.getInstance().getBufferBuilders().getEffectVertexConsumers();
+                VertexConsumer consumer = ItemRenderer.getArmorGlintConsumer(provider, Layers.QUADS_GLINT, true);
+                model.render(matrixStack, consumer, i, OverlayTexture.DEFAULT_UV, color);
+                Layers.QUADS_GLINT.endDrawing();
+            }
+
+            ChamsRenderer renderer = ChamsModule.getInstance().mode.getValue().getRenderer();
+            float tickDelta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(false);
+            ChamsRenderer.render(renderer, last, tickDelta, color);
+        }
     }
 
     @Redirect(
